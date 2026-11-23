@@ -2,6 +2,7 @@ import streamlit as st
 import random
 import sqlite3
 import pandas as pd
+from datetime import datetime
 
 # ================= 1. 数据库设置 =================
 conn = sqlite3.connect('practice_record.db', check_same_thread=False)
@@ -11,119 +12,138 @@ c.execute('''CREATE TABLE IF NOT EXISTS records
               center TEXT, scene TEXT, decision TEXT, score INTEGER, terms TEXT, time TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
 conn.commit()
 
-# ================= 2. 页面配置 =================
-st.set_page_config(page_title="高保真电商上架模拟", page_icon="🛍️", layout="wide")
-st.sidebar.title("🎮 系统导航")
-page = st.sidebar.radio("选择功能", ["高保真上架模拟", "我的复盘数据"])
+# ================= 2. 页面全局配置 (隐藏默认UI，增加高级感) =================
+st.set_page_config(page_title="电商运营工作台", page_icon="🛍️", layout="wide")
 
-# ================= 3. 上架模拟核心逻辑 =================
-def publish_simulation():
-    st.title("🛒 千牛商品发布模拟")
-    st.write("请严格按照流程填写，系统将模拟淘宝的发布审核机制。")
-
-    # 使用 tabs 实现千牛后台的界面感
-    tab1, tab2, tab3, tab4 = st.tabs(["1. 类目与品牌", "2. 基础信息(标题/属性)", "3. 销售信息(SKU/价格)", "4. 物流与服务"])
-
-    with tab1:
-        st.subheader("商品类目选择")
-        search_cat = st.text_input("搜索类目（例如输入：手链）")
-        if search_cat:
-            st.radio("选择系统匹配的类目：", [
-                "饰品/流行首饰/时尚饰品新 > 手链",
-                "珠宝/钻石/翡翠 > 翡翠 > 手链/手串",
-                "特色手工艺 > 佛教工艺品"
-            ])
-        st.subheader("品牌选择")
-        brand = st.selectbox("选择品牌（无品牌请选无品牌）", ["请选择", "无品牌", "卡地亚", "周大福", "自建品牌"])
-        
-    with tab2:
-        st.subheader("宝贝标题（60个字符限制）")
-        st.caption("系统提供的词库：龙年、红绳、本命年、招财、原创、925银、手链、闺蜜礼物、国潮")
-        title = st.text_input("请输入标题", max_chars=60)
-        st.subheader("商品属性（填得越全流量越高）")
-        col1, col2 = st.columns(2)
-        with col1:
-            material = st.selectbox("材质", ["请选择", "925银", "红绳", "黄金"])
-            style = st.selectbox("风格", ["请选择", "国潮", "复古", "简约"])
-        with col2:
-            gender = st.selectbox("适用性别", ["请选择", "女", "男", "情侣"])
-            is_custom = st.radio("是否定制", ["是", "否"], index=1)
-
-    with tab3:
-        st.subheader("SKU设置（颜色/规格）")
-        sku_name = st.text_input("颜色分类（如：龙年红绳款）", value="")
-        price = st.number_input("一口价（元）", min_value=1.0, value=99.0)
-        stock = st.number_input("库存数量", min_value=0, value=50)
-        
-        st.subheader("上传图片空间")
-        st.info("这里模拟主图上传。当前已自动匹配 1:1 主图3张，详情图1张。")
-        st.file_uploader("（演示）拖拽真实图片上传", accept_multiple_files=True)
-
-    with tab4:
-        st.subheader("物流与服务")
-        delivery_time = st.selectbox("发货时间", ["4小时内发货", "24小时内发货", "48小时内发货"])
-        freight = st.selectbox("运费模板", ["卖家默认运费模板（包邮）", "偏远地区加邮费"])
-        st.radio("退换货承诺", ["支持7天无理由退货（必选）", "不支持"])
-
-    st.divider()
+# 注入 CSS 样式，让按钮变成卡片，隐藏 Streamlit 默认的汉堡菜单
+st.markdown("""
+<style>
+    /* 隐藏顶部的默认菜单和红条 */
+    #MainMenu {visibility: hidden;}
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
     
-    # 提交审核
-    if st.button("🚀 提交宝贝信息（模拟审核）", type="primary", use_container_width=True):
-        score = 100
-        report = []
-        
-        # 模拟审核逻辑
-        if brand == "请选择":
-            score -= 30
-            report.append("❌ 品牌未选择，严重影响转化。")
-        elif brand in ["卡地亚", "周大福"]:
-            score = 0
-            report.append("❌ 严重违规！涉嫌售卖假冒品牌，直接封店。")
-            
-        if len(title) < 20:
-            score -= 10
-            report.append("⚠️ 标题过短，无法覆盖足够的搜索词。")
-        if "龙年" not in title and "手链" not in title:
-            score -= 15
-            report.append("⚠️ 标题缺少核心词（龙年/手链），曝光量低。")
-            
-        if material == "请选择" or style == "请选择":
-            score -= 15
-            report.append("⚠️ 属性未填写完整，系统无法精准打标签。")
-            
-        if price < 30:
-            report.append("⚠️ 售价过低，注意算上运费和扣点是否亏本。")
-            
-        if stock == 0:
-            score -= 20
-            report.append("❌ 库存为0，商品发布后将会直接下架。")
+    /* 卡片样式 */
+    div.stButton > button {
+        width: 100%;
+        height: 120px;
+        border-radius: 12px;
+        border: 1px solid #e0e0e0;
+        background-color: #ffffff;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        transition: 0.3s;
+    }
+    div.stButton > button:hover {
+        border-color: #ff6b6b;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        transform: translateY(-2px);
+    }
+    
+    /* 侧边栏背景色 */
+    [data-testid="stSidebar"] {
+        background-color: #2b3952;
+    }
+    [data-testid="stSidebar"] * {
+        color: white !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-        if score >= 80:
-            st.success(f"✅ 审核通过！本次模拟得分：{score} 分")
-        elif score > 0:
-            st.warning(f"⚠️ 勉强过审，但存在隐患。得分：{score} 分")
-        else:
-            st.error(f"❌ 审核失败！得分：{score} 分")
+# ================= 3. 侧边栏 (导航) =================
+with st.sidebar:
+    st.markdown("### 👤 Zahia")
+    st.caption("电商运营训练工作台")
+    st.divider()
+    st.markdown("**🏠 小窝 (Home)**")
+    st.markdown("🏆 学堂 (技能训练)")
+    st.markdown("🎮 乐园 (实战模拟)")
+    st.markdown("📊 成就图谱")
+    st.markdown("⚙️ 设置与重置")
 
-        st.write("**🩺 系统体检报告：**")
-        for r in report:
-            st.write(r)
+# ================= 4. 主页面 (工作台) =================
+# 顶部欢迎语和时间
+col_time, col_quote = st.columns([1, 2])
+with col_time:
+    now = datetime.now()
+    st.markdown(f"<h1 style='margin-bottom:0;'>{now.strftime('%H:%M')}</h1>", unsafe_allow_html=True)
+    st.caption(now.strftime('%Y年%m月%d日'))
+with col_quote:
+    st.info("💡 **“慢慢来，比较快。运营是一个需要不断复盘的手艺。”**")
+
+st.write("") # 占位
+
+# 数据看板 (读取数据库统计)
+df = pd.read_sql_query("SELECT * FROM records", conn)
+total_practice = len(df)
+avg_score = df['score'].mean() if total_practice > 0 else 0
+best_score = df['score'].max() if total_practice > 0 else 0
+
+st.markdown("### 📈 今日数据")
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("累计练习", f"{total_practice} 次")
+col2.metric("平均得分", f"{avg_score:.1f} 分")
+col3.metric("最高得分", f"{best_score} 分")
+col4.metric("今日心情", "😎 极佳")
+
+st.divider()
+
+# 快捷录入 (卡片式入口)
+st.markdown("### ⚡ 快捷练习")
+st.write("点击下方卡片，进入不同的电商实战模块：")
+
+# 这是第一排卡片
+c1, c2, c3 = st.columns(3)
+with c1:
+    if st.button("📦\n\n**选品定价**\n商品利润测算与定价策略"):
+        st.session_state.page = "pricing"
+with c2:
+    if st.button("📈\n\n**广告投放**\nROI模拟与关键词出价"):
+        st.session_state.page = "ads"
+with c3:
+    if st.button("💬\n\n**客服转化**\n话术诊断与催付挽回"):
+        st.session_state.page = "service"
+
+# 这是第二排卡片
+c4, c5, c6 = st.columns(3)
+with c4:
+    if st.button("🌍\n\n**跨境FBA**\n亚马逊全成本利润核算"):
+        st.session_state.page = "cross_border"
+with c5:
+    if st.button("🛒\n\n**千牛上架**\n淘宝后台全真模拟"):
+        st.session_state.page = "taobao"
+with c6:
+    if st.button("📊\n\n**数据复盘**\n查看错题本与成绩趋势"):
+        st.session_state.page = "review"
+
+st.divider()
+
+# ================= 5. 模拟练习区逻辑 =================
+# 这里以弹窗或底部展开的形式展示，不破坏主页面的美观
+page = st.session_state.get("page", "")
+
+if page != "":
+    st.markdown(f"### 🎯 当前进入模块：{page.upper()}")
+    
+    # 简单演示一下弹窗逻辑
+    if page == "pricing":
+        st.info("进货成本 30 元，物流 5 元，扣点 5%。你的定价是：")
+        price = st.number_input("输入售价", value=80.0)
+        if st.button("提交测算"):
+            profit = price - 30 - 5 - (price * 0.05)
+            st.success(f"单件利润：{profit:.2f} 元")
+            c.execute("INSERT INTO records (center, scene, decision, score, terms) VALUES ('选品定价', '基础测算', '无', 80, '毛利率')", )
+            conn.commit()
+            st.session_state.page = "" # 清空状态
+            st.rerun()
             
-        st.info("📖 **本次术语**：SPU（标准化产品单元，指整个手链） / SKU（库存量单位，指红绳款、黑绳款等具体选项） / 流量漏斗。")
-
-        # 记录成绩
-        c.execute("INSERT INTO records (center, scene, decision, score, terms) VALUES (?, ?, ?, ?, ?)",
-                  ("淘宝发布模拟", "手链上架", f"品牌:{brand}, 标题:{title}, 价格:{price}", score, "SPU/SKU/流量漏斗"))
-        conn.commit()
-        st.toast("✅ 成绩已保存至复盘看板！")
-
-# ================= 4. 页面路由 =================
-if page == "高保真上架模拟":
-    publish_simulation()
-elif page == "我的复盘数据":
-    st.title("📊 我的复盘与数据看板")
-    df = pd.read_sql_query("SELECT * FROM records ORDER BY time DESC", conn)
-    if df.empty:
-        st.info("暂无记录，快去模拟一次上架吧！")
+    elif page == "review":
+        st.dataframe(df[["time", "center", "score"]], use_container_width=True)
+        if st.button("返回工作台"):
+            st.session_state.page = ""
+            st.rerun()
+            
     else:
-        st.dataframe(df[["time", "center", "score", "decision"]], use_container_width=True)
+        st.warning("该模块正在开发中... (你可以继续让我帮你补充对应的交互界面)")
+        if st.button("返回工作台"):
+            st.session_state.page = ""
+            st.rerun()
